@@ -15,15 +15,15 @@ service: candidate
 
 # You can pin your service to only deploy with a specific Serverless version
 # Check out our docs for more details
-# frameworkVersion: "=X.X.X"
+# frameworkVersion: ">=1.1.0 <2.0.0"
 
 provider:
   name: aws
   runtime: nodejs6.10
 
 # you can overwrite defaults here
-#  stage: dev
-#  region: us-east-1
+  stage: dev
+  region: us-east-1
 
 # you can add statements to the Lambda function's IAM Role here
 #  iamRoleStatements:
@@ -42,8 +42,17 @@ provider:
 #            - "/*"
 
 # you can define service wide environment variables here
-#  environment:
-#    variable1: value1
+  environment:
+    CANDIDATE_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+    CANDIDATE_EMAIL_TABLE: "candidate-email-${opt:stage, self:provider.stage}"
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb: Query
+        - dynamodb: Scan
+        - dynamodb: GetItem
+        - dynamodb: PutItem
+      Resource: "*"
 
 # you can add packaging information here
 #package:
@@ -55,8 +64,14 @@ provider:
 #    - exclude-me-dir/**
 
 functions:
-  hello:
-    handler: handler.hello
+  candidateSubmission:
+    handler: api/candidates.submit
+    memorySize: 128
+    description: Submit candidate information and starts interview process.
+    events:
+      - http:
+          path: candidates
+          method: post
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
@@ -91,12 +106,26 @@ functions:
 #      variable2: value2
 
 # you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
+    resources:
+      Resources:
+        CandidatesDynamoDbTable:
+          Type: 'AWS::DynamoDB::Table'
+          DeletionPolicy: Retain
+          Properties:
+            AttributeDefinitions:
+              -
+                AttributeName: "id"
+                AttributeType: "S"
+            KeySchema:
+              -
+                AttributeName: "id"
+                KeyType: "HASH"
+            ProvisionedThroughout:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+          StreamSpecification:
+            StreamViewType: "NEW_AND_OLD_IMAGES"
+          TableName: ${self:provider.environment.CANDIDATE_TABLE}
 #  Outputs:
 #     NewOutput:
 #       Description: "Description for the output"
